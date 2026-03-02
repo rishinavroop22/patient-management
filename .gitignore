@@ -1,0 +1,16 @@
+# IntelliJ
+.idea/
+*.iml
+
+# Maven
+target/
+
+# CDK
+cdk.out/
+
+# Compiled
+*.class
+
+# OS
+.DS_Store
+Thumbs.db

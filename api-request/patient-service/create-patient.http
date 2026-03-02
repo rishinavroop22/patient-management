@@ -1,0 +1,14 @@
+### GET request to example server
+POST http://lb-87e39b9e.elb.localhost.localstack.cloud:4000/patients
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "John Dsoe k",
+  "email": "kafsdhda3ers0@exampe.com",
+  "address": "123 main strjeetkal",
+  "dateOfBirth": "1995-01-02",
+  "registeredDate": "2024-01-04"
+}
+
+###

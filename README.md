@@ -62,28 +62,53 @@ patient-management/
 
 - Java 21
 - Maven 3.9+
-- Docker
+- Docker & Docker Compose
 - (Optional) LocalStack for local AWS emulation
 
 ## Building and Running
 
-### Build a Service
+### Run All Services with Docker Compose
 
-Each service can be built independently using the included Maven wrapper:
+The easiest way to run the full stack locally is with Docker Compose. This builds every service image and starts all dependencies (PostgreSQL, Kafka) automatically:
+
+1. Copy the example environment file and set your secrets:
+
+```bash
+cp .env.example .env
+# Edit .env and set POSTGRES_PASSWORD and JWT_SECRET
+```
+
+2. Build and start all services:
+
+```bash
+docker compose up --build
+```
+
+The API Gateway will be available at `http://localhost:4004` once all services are healthy.
+
+To stop all services:
+
+```bash
+docker compose down
+```
+
+### Build a Single Service
+
+Each service can also be built independently using the included Maven wrapper:
 
 ```bash
 cd <service-name>
 ./mvnw clean package
 ```
 
-### Run a Service Locally
+### Run a Single Service Locally
 
 ```bash
 cd <service-name>
 ./mvnw spring-boot:run
 ```
 
-### Build Docker Images
+### Build a Single Docker Image
 
 Each service includes a multi-stage `Dockerfile`:
 

@@ -1,0 +1,124 @@
+services:
+
+  # ── Databases ────────────────────────────────────────────────────────────────
+
+  postgres-auth:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: auth-service-db
+      POSTGRES_USER: ${POSTGRES_USER:-admin_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin_user} -d auth-service-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-patient:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: patient-service-db
+      POSTGRES_USER: ${POSTGRES_USER:-admin_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin_user} -d patient-service-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Messaging ─────────────────────────────────────────────────────────────────
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Microservices ─────────────────────────────────────────────────────────────
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "4005:4005"
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/auth-service-db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-admin_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: always
+      JWT_SECRET: ${JWT_SECRET}
+
+  billing-service:
+    build: ./billing-service
+    ports:
+      - "4001:4001"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/4001'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  patient-service:
+    build: ./patient-service
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres-patient:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      billing-service:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-patient:5432/patient-service-db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-admin_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: always
+      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BILLING_SERVICE_ADDRESS: billing-service
+      BILLING_SERVICE_GRPC_PORT: "9001"
+
+  analytics-service:
+    build: ./analytics-service
+    ports:
+      - "4002:4002"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "4004:4004"
+    depends_on:
+      - auth-service
+      - patient-service
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:4005
